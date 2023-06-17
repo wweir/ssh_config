@@ -106,8 +106,8 @@ func (p *sshParser) parseKV() sshParserStateFn {
 	}
 	if strings.ToLower(key.val) == "match" {
 		// https://github.com/kevinburke/ssh_config/issues/6
-		p.raiseErrorf(val, "ssh_config: Match directive parsing is unsupported")
-		return nil
+		// p.raiseErrorf(val, "ssh_config: Match directive parsing is unsupported")
+		return p.parseStart
 	}
 	if strings.ToLower(key.val) == "host" {
 		strPatterns := strings.Split(val.val, " ")
