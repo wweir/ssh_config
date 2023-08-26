@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -172,6 +171,43 @@ func TestGetAllNotFoundNoDefault(t *testing.T) {
 	}
 	if len(val) != 0 {
 		t.Errorf("expected to get CanonicalDomains '', got %q", val)
+	}
+}
+
+func TestSetDefault(t *testing.T) {
+	defaultIdentity := Default("IdentityFile")
+	if defaultIdentity != "~/.ssh/identity" {
+		t.Fatalf("expected '~/.ssh/identity', got '%v'", defaultIdentity)
+	}
+	defer SetDefault("IdentityFile", defaultIdentity)
+
+	us := &UserSettings{
+		userConfigFinder: testConfigFinder("testdata/config1"),
+	}
+	val, err := us.GetStrict("wap", "IdentityFile")
+	if err != nil {
+		t.Fatalf("expected nil err, got %v", err)
+	}
+	if val != "~/.ssh/identity" {
+		t.Errorf("expected to get '~/.ssh/identity', got %q", val)
+	}
+
+	SetDefault("IdentityFile", "")
+
+	val, err = us.GetStrict("wap", "IdentityFile")
+	if err != nil {
+		t.Fatalf("expected nil err, got %v", err)
+	}
+	if val != "" {
+		t.Errorf("expected to get empty string, got %q", val)
+	}
+
+	vals, err := us.GetAllStrict("wap", "IdentityFile")
+	if err != nil {
+		t.Fatalf("expected nil err, got %v", err)
+	}
+	if len(vals) != 0 {
+		t.Errorf("expected to get empty array, got %q", vals)
 	}
 }
 
@@ -394,11 +430,8 @@ func TestMatchUnsupported(t *testing.T) {
 	}
 
 	_, err := us.GetStrict("test.test", "Port")
-	if err == nil {
-		t.Fatal("expected Match directive to error, didn't")
-	}
-	if !strings.Contains(err.Error(), "ssh_config: Match directive parsing is unsupported") {
-		t.Errorf("wrong error: %v", err)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

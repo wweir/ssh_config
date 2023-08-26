@@ -15,6 +15,11 @@ func Default(keyword string) string {
 	return defaults[strings.ToLower(keyword)]
 }
 
+// SetDefault change the default value for the given keyword.
+func SetDefault(keyword string, value string) {
+	defaults[strings.ToLower(keyword)] = value
+}
+
 // Arguments where the value must be "yes" or "no" and *only* yes or no.
 var yesnos = map[string]bool{
 	strings.ToLower("BatchMode"):                        true,
