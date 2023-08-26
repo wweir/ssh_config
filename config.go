@@ -337,6 +337,16 @@ func Decode(r io.Reader) (*Config, error) {
 	return decodeBytes(b, false, 0)
 }
 
+// DecodeSystemConfig reads r into a Config with true system flag,
+// or returns an error if r could not be parsed as an SSH config file.
+func DecodeSystemConfig(r io.Reader) (*Config, error) {
+	b, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	return decodeBytes(b, true, 0)
+}
+
 // DecodeBytes reads b into a Config, or returns an error if r could not be
 // parsed as an SSH config file.
 func DecodeBytes(b []byte) (*Config, error) {
