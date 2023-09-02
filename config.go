@@ -479,8 +479,18 @@ type Pattern struct {
 }
 
 // String prints the string representation of the pattern.
-func (p Pattern) String() string {
+func (p *Pattern) String() string {
 	return p.str
+}
+
+// Regex returns the pattern regex
+func (p *Pattern) Regex() *regexp.Regexp {
+	return p.regex
+}
+
+// Not returns true if it is a negated match
+func (p *Pattern) Not() bool {
+	return p.not
 }
 
 // Copied from regexp.go with * and ? removed.
