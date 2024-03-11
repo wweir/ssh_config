@@ -44,7 +44,7 @@ func (s *sshLexer) lexRspace() sshLexStateFn {
 		}
 		s.skip()
 	}
-	return s.lexRvalue
+	return s.lexRvalue(true)
 }
 
 func (s *sshLexer) lexEquals() sshLexStateFn {
@@ -61,7 +61,7 @@ func (s *sshLexer) lexEquals() sshLexStateFn {
 		}
 		s.skip()
 	}
-	return s.lexRvalue
+	return s.lexRvalue(false)
 }
 
 func (s *sshLexer) lexKey() sshLexStateFn {
@@ -81,36 +81,43 @@ func (s *sshLexer) lexKey() sshLexStateFn {
 	return s.lexEquals
 }
 
-func (s *sshLexer) lexRvalue() sshLexStateFn {
-	growingString := ""
-	for {
-		next := s.peek()
-		switch next {
-		case '\r':
-			if s.follow("\r\n") {
+func (s *sshLexer) lexRvalue(notEndWithComment bool) sshLexStateFn {
+	return func() sshLexStateFn {
+		growingString := ""
+		for {
+			next := s.peek()
+			switch next {
+			case '\r':
+				if s.follow("\r\n") {
+					s.emitWithValue(tokenString, growingString)
+					s.skip()
+					return s.lexVoid
+				}
+			case '\n':
 				s.emitWithValue(tokenString, growingString)
 				s.skip()
 				return s.lexVoid
+			case '#':
+				if notEndWithComment {
+					growingString += string(next)
+					s.next()
+					continue
+				}
+				s.emitWithValue(tokenString, growingString)
+				s.skip()
+				return s.lexComment(s.lexVoid)
+			case eof:
+				s.next()
 			}
-		case '\n':
-			s.emitWithValue(tokenString, growingString)
-			s.skip()
-			return s.lexVoid
-		case '#':
-			s.emitWithValue(tokenString, growingString)
-			s.skip()
-			return s.lexComment(s.lexVoid)
-		case eof:
+			if next == eof {
+				break
+			}
+			growingString += string(next)
 			s.next()
 		}
-		if next == eof {
-			break
-		}
-		growingString += string(next)
-		s.next()
+		s.emit(tokenEOF)
+		return nil
 	}
-	s.emit(tokenEOF)
-	return nil
 }
 
 func (s *sshLexer) read() rune {
