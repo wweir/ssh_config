@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"github.com/google/shlex"
 )
 
 type sshParser struct {
@@ -138,7 +140,12 @@ func (p *sshParser) parseKV() sshParserStateFn {
 	}
 	lastHost := p.config.Hosts[len(p.config.Hosts)-1]
 	if strings.ToLower(key.val) == "include" {
-		inc, err := NewInclude(strings.Split(val.val, " "), hasEquals, key.Position, comment, p.system, p.depth+1)
+		directives, err := shlex.Split(val.val)
+		if err != nil {
+			p.raiseErrorf(val, "Error spliting Include directive: %v", err)
+			return nil
+		}
+		inc, err := NewInclude(directives, hasEquals, key.Position, comment, p.system, p.depth+1)
 		if err == ErrDepthExceeded {
 			p.raiseError(val, err)
 			return nil

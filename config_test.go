@@ -2,9 +2,11 @@ package ssh_config
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -551,6 +553,108 @@ func TestCommentValue(t *testing.T) {
 		val := us.Get("comment", tc.key)
 		if val != tc.expectedValue {
 			t.Errorf("expected to get %q, got %q", tc.expectedValue, val)
+		}
+	}
+}
+
+func TestQuoteAndSpace(t *testing.T) {
+	quotePath, err := filepath.Abs("testdata/quote")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spacePath, err := filepath.Abs("testdata/path with space")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfgFile := fmt.Sprintf(`Include '%s' "%s"
+Host admin
+  XAuthLocation /usr/bin/xauth
+  IdentityAgent ~/Library/Group Containers/x x x/agent.sock
+  UserKnownHostsFile "~/.ssh/kh1" ~/.ssh/kh2 "~/.ssh/k h 3"
+  SetEnv LC_A=1 LC_B="2 3" "LC_C=4 5 6"
+  SetEnv = 'LC_D = 7 "8 9"'
+`, quotePath, spacePath)
+
+	cfg, err := Decode(bytes.NewReader([]byte(cfgFile)))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, kv := range []struct {
+		host  string
+		key   string
+		value string
+	}{
+		{"admin", "XAuthLocation", "/usr/bin/xauth"},
+		{"quote", "XAuthLocation", "/usr/bin/xauth"},
+		{"space", "XAuthLocation", "/usr/bin/xauth"},
+		{"admin", "IdentityAgent", "~/Library/Group Containers/x x x/agent.sock"},
+		{"quote", "IdentityAgent", "~/Library/Group Containers/x x x/agent.sock"},
+		{"space", "IdentityAgent", "~/Library/Group Containers/x x x/agent.sock"},
+		{"admin", "UserKnownHostsFile", `"~/.ssh/kh1" ~/.ssh/kh2 "~/.ssh/k h 3"`},
+		{"quote", "UserKnownHostsFile", `~/.ssh/kh1 ~/.ssh/kh2 "~/.ssh/k h 3"`},
+		{"space", "UserKnownHostsFile", `'~/.ssh/kh1' ~/.ssh/kh2 "~/.ssh/k h 3"`},
+	} {
+		value, err := cfg.Get(kv.host, kv.key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if value != kv.value {
+			t.Errorf("expected %q.%q to be %q, got %q", kv.host, kv.key, kv.value, value)
+		}
+	}
+
+	for _, kv := range []struct {
+		host   string
+		key    string
+		values []string
+	}{
+		{"admin", "UserKnownHostsFile", []string{"~/.ssh/kh1", "~/.ssh/kh2", "~/.ssh/k h 3"}},
+		{"quote", "UserKnownHostsFile", []string{"~/.ssh/kh1", "~/.ssh/kh2", "~/.ssh/k h 3"}},
+		{"space", "UserKnownHostsFile", []string{"~/.ssh/kh1", "~/.ssh/kh2", "~/.ssh/k h 3"}},
+	} {
+		values, err := cfg.GetSplits(kv.host, kv.key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(values, kv.values) {
+			t.Errorf("expected %q.%q to be %q, got %q", kv.host, kv.key, kv.values, values)
+		}
+	}
+
+	for _, kv := range []struct {
+		host   string
+		key    string
+		values []string
+	}{
+		{"admin", "SetEnv", []string{`LC_A=1 LC_B="2 3" "LC_C=4 5 6"`, `LC_D = 7 "8 9"`}},
+		{"quote", "SetEnv", []string{`'LC_A=1' LC_B='2 3' 'LC_C=4 5 6'`, `LC_D = 7 "8 9"`}},
+		{"space", "SetEnv", []string{`"LC_A=1" LC_B="2 3" LC_C="4 5 6"`, `LC_D = 7 "8 9"`}},
+	} {
+		values, err := cfg.GetAll(kv.host, kv.key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(values, kv.values) {
+			t.Errorf("expected %q.%q to be %q, got %q", kv.host, kv.key, kv.values, values)
+		}
+	}
+
+	for _, kv := range []struct {
+		host   string
+		key    string
+		values []string
+	}{
+		{"admin", "SetEnv", []string{"LC_A=1", "LC_B=2 3", "LC_C=4 5 6", `LC_D = 7 "8 9"`}},
+		{"quote", "SetEnv", []string{"LC_A=1", "LC_B=2 3", "LC_C=4 5 6", `LC_D = 7 "8 9"`}},
+		{"space", "SetEnv", []string{"LC_A=1", "LC_B=2 3", "LC_C=4 5 6", `LC_D = 7 "8 9"`}},
+	} {
+		values, err := cfg.GetAllSplits(kv.host, kv.key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(values, kv.values) {
+			t.Errorf("expected %q.%q to be %q, got %q", kv.host, kv.key, kv.values, values)
 		}
 	}
 }

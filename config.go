@@ -41,6 +41,8 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+
+	"github.com/google/shlex"
 )
 
 const version = "1.2"
@@ -386,6 +388,15 @@ type Config struct {
 //
 // The match for key is case insensitive.
 func (c *Config) Get(alias, key string) (string, error) {
+	return c.get(alias, key, true)
+}
+
+// get finds the first value in the configuration that matches the alias and
+// contains key. Get returns the empty string if no value was found, or if the
+// Config contains an invalid conditional Include value.
+//
+// The match for key is case insensitive.
+func (c *Config) get(alias, key string, unquote bool) (string, error) {
 	lowerKey := strings.ToLower(key)
 	for _, host := range c.Hosts {
 		if !host.Matches(alias) {
@@ -402,10 +413,10 @@ func (c *Config) Get(alias, key string) (string, error) {
 					panic("can't handle Match directives")
 				}
 				if lkey == lowerKey {
-					return t.Value, nil
+					return t.GetValue(unquote), nil
 				}
 			case *Include:
-				val := t.Get(alias, key)
+				val := t.get(alias, key, unquote)
 				if val != "" {
 					return val, nil
 				}
@@ -417,9 +428,28 @@ func (c *Config) Get(alias, key string) (string, error) {
 	return "", nil
 }
 
+// GetSplits returns the split slice of the first value in the configuration
+// that matches the alias and contains key.
+func (c *Config) GetSplits(alias, key string) ([]string, error) {
+	value, err := c.get(alias, key, false)
+	if err != nil {
+		return nil, err
+	}
+	if value == "" {
+		return []string{}, nil
+	}
+	return shlex.Split(value)
+}
+
 // GetAll returns all values in the configuration that match the alias and
 // contains key, or nil if none are present.
 func (c *Config) GetAll(alias, key string) ([]string, error) {
+	return c.getAll(alias, key, true)
+}
+
+// getAll returns all values in the configuration that match the alias and
+// contains key, or nil if none are present.
+func (c *Config) getAll(alias, key string, unquote bool) ([]string, error) {
 	lowerKey := strings.ToLower(key)
 	all := []string(nil)
 	for _, host := range c.Hosts {
@@ -437,10 +467,10 @@ func (c *Config) GetAll(alias, key string) ([]string, error) {
 					panic("can't handle Match directives")
 				}
 				if lkey == lowerKey {
-					all = append(all, t.Value)
+					all = append(all, t.GetValue(unquote))
 				}
 			case *Include:
-				val, _ := t.GetAll(alias, key)
+				val, _ := t.getAll(alias, key, unquote)
 				if len(val) > 0 {
 					all = append(all, val...)
 				}
@@ -450,6 +480,26 @@ func (c *Config) GetAll(alias, key string) ([]string, error) {
 		}
 	}
 
+	return all, nil
+}
+
+// GetAllSplits returns all the split slice of the values in the configuration
+// that match the alias and contains key.
+func (c *Config) GetAllSplits(alias, key string) ([]string, error) {
+	values, err := c.getAll(alias, key, false)
+	if err != nil {
+		return nil, err
+	}
+	var all []string
+	for _, value := range values {
+		val, err := shlex.Split(value)
+		if err != nil {
+			return nil, err
+		}
+		if len(val) > 0 {
+			all = append(all, val...)
+		}
+	}
 	return all, nil
 }
 
@@ -660,6 +710,18 @@ func (k *KV) String() string {
 	return line
 }
 
+// GetValue returns the value with unquote or not.
+func (k *KV) GetValue(unquote bool) string {
+	if unquote && len(k.Value) > 1 &&
+		(strings.HasPrefix(k.Value, "\"") && strings.HasSuffix(k.Value, "\"") ||
+			strings.HasPrefix(k.Value, "'") && strings.HasSuffix(k.Value, "'")) {
+		if tokens, err := shlex.Split(k.Value); err == nil && len(tokens) == 1 {
+			return tokens[0]
+		}
+	}
+	return k.Value
+}
+
 // Empty is a line in the config file that contains only whitespace or comments.
 type Empty struct {
 	Comment      string
@@ -783,6 +845,12 @@ func (i *Include) Pos() Position {
 // Get finds the first value in the Include statement matching the alias and the
 // given key.
 func (inc *Include) Get(alias, key string) string {
+	return inc.get(alias, key, true)
+}
+
+// get finds the first value in the Include statement matching the alias and the
+// given key.
+func (inc *Include) get(alias, key string, unquote bool) string {
 	inc.mu.Lock()
 	defer inc.mu.Unlock()
 	// TODO: we search files in any order which is not correct
@@ -791,7 +859,7 @@ func (inc *Include) Get(alias, key string) string {
 		if cfg == nil {
 			panic("nil cfg")
 		}
-		val, err := cfg.Get(alias, key)
+		val, err := cfg.get(alias, key, unquote)
 		if err == nil && val != "" {
 			return val
 		}
@@ -807,6 +875,12 @@ func (inc *Include) GetFiles() map[string]*Config {
 // GetAll finds all values in the Include statement matching the alias and the
 // given key.
 func (inc *Include) GetAll(alias, key string) ([]string, error) {
+	return inc.getAll(alias, key, true)
+}
+
+// GetAll finds all values in the Include statement matching the alias and the
+// given key.
+func (inc *Include) getAll(alias, key string, unquote bool) ([]string, error) {
 	inc.mu.Lock()
 	defer inc.mu.Unlock()
 	var vals []string
@@ -817,7 +891,7 @@ func (inc *Include) GetAll(alias, key string) ([]string, error) {
 		if cfg == nil {
 			panic("nil cfg")
 		}
-		val, err := cfg.GetAll(alias, key)
+		val, err := cfg.getAll(alias, key, unquote)
 		if err == nil && len(val) != 0 {
 			// In theory if SupportsMultiple was false for this key we could
 			// stop looking here. But the caller has asked us to find all
