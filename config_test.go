@@ -566,7 +566,7 @@ func TestQuoteAndSpace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfgFile := fmt.Sprintf(`Include '%s' "%s"
+	cfgFile := fmt.Sprintf(`Include '%s' '%s'
 Host admin
   XAuthLocation /usr/bin/xauth
   IdentityAgent ~/Library/Group Containers/x x x/agent.sock
