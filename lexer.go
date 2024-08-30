@@ -2,6 +2,7 @@ package ssh_config
 
 import (
 	"bytes"
+	"unicode"
 )
 
 // Define state functions
@@ -98,7 +99,8 @@ func (s *sshLexer) lexRvalue(notEndWithComment bool) sshLexStateFn {
 				s.skip()
 				return s.lexVoid
 			case '#':
-				if notEndWithComment {
+				if notEndWithComment ||
+					(len(growingString) > 0 && unicode.IsSpace(rune(growingString[len(growingString)-1]))) {
 					growingString += string(next)
 					s.next()
 					continue
