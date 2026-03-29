@@ -1,1 +1,3 @@
-testdata/dos-lines eol=crlf
+* text eol=lf
+
+testdata/dos-lines binary
